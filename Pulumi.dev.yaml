@@ -1,0 +1,2 @@
+config:
+  pulumi:template: https://api.pulumi.com/api/ai/chat/conversations/atrakic/atrakic/0d50a9db-db3e-4365-a39f-131895a98b82/programs/9cr7ouw.zip

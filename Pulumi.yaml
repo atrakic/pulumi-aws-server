@@ -1,0 +1,7 @@
+name: copilot-programs
+runtime: nodejs
+description: Ubuntu EC2 with SSH in a minimal VPC (AWS us-west-2)
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: https://api.pulumi.com/api/ai/chat/conversations/atrakic/atrakic/0d50a9db-db3e-4365-a39f-131895a98b82/programs/9cR7ouW.zip
