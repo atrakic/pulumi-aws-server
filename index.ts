@@ -3,6 +3,7 @@ import * as awsx from "@pulumi/awsx";
 import { SecurityGroupComponent, KeyPairComponent, EC2InstanceComponent } from "./components";
 
 // Configurable Ubuntu Server on AWS with Pulumi
+// Minimal, public-only VPC with an Internet Gateway using awsx for simplicity.
 // This template creates a secure, configurable Ubuntu server with environment-specific settings.
 // All hardcoded values have been moved to Pulumi configuration for better maintainability.
 

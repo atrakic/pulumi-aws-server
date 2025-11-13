@@ -7,11 +7,11 @@ config:
       pulumi:template: https://api.pulumi.com/api/ai/chat/conversations/atrakic/atrakic/0d50a9db-db3e-4365-a39f-131895a98b82/programs/9cR7ouW.zip
   
   # Production Infrastructure Configuration
-  aws-server:projectName: "ubuntu-ssh"
+  aws-server:projectName: "ubuntu-prod-ssh"
   aws-server:environment: "prod"
   aws-server:instanceType: "t3.medium"  # Larger instance for production
-  aws-server:availabilityZones: 3        # Multi-AZ for high availability
-  aws-server:enableNatGateway: true      # NAT gateway for private subnets
+  aws-server:availabilityZones: 1        # Single AZ for minimal setup
+  aws-server:enableNatGateway: false     # No NAT gateway for minimal setup
   
   # Production Security Configuration - Very restrictive
   aws-server:allowedCidrBlocks: "203.0.113.0/24"  # Your office/VPN IP range - CHANGE THIS!
@@ -19,13 +19,12 @@ config:
   aws-server:sshPort: 2222  # Non-standard SSH port
   
   # SSH Key Configuration for production
-  aws-server:createKeyPair: true
   aws-server:publicKeyMaterial: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIYourProductionPublicKeyGoesHere user@production"
   
   # Production Instance Configuration
   aws-server:ubuntuVersion: "22.04"
-  aws-server:enablePublicIp: false  # Private instance behind load balancer
-  aws-server:cloudInitFile: "cloud-init-prod.yaml"
+  aws-server:enablePublicIp: true   # Public IP for minimal setup
+  aws-server:cloudInitFile: "cloud-init.yaml"
   
   # Production services ports
   aws-server:additionalPorts: "443,8080"  # Only HTTPS and app port

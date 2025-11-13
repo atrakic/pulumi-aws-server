@@ -1,17 +1,21 @@
 #cloud-config
 
+# Production cloud-init configuration
+# More security-focused and optimized for production workloads
+
 package_update: true
 package_upgrade: true
 
+# Production user configuration
 users:
   - name: ubuntu
     groups: [sudo]
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
-      - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAr...
+      - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAr... # Production SSH key
 
-# Optional: Install additional packages
+# Production packages - minimal and security-focused
 packages:
   - curl
   - wget
@@ -24,30 +28,86 @@ packages:
   - software-properties-common
   - unattended-upgrades
   - fail2ban
+  - ufw
+  - chrony  # Time synchronization
+  - auditd  # Security auditing
+  - apt-transport-https
+  - docker.io
+  - docker-compose
 
-# Optional: Run commands on first boot
+# Production-specific commands
 runcmd:
-  - echo "Server initialization complete" > /tmp/init-complete.log
-  - systemctl enable ssh
-  - systemctl start ssh
-
+  - echo "Production server initialization started" > /var/log/server-init.log
+  
+  # Configure UFW firewall
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 2222/tcp  # Custom SSH port
+  - ufw allow 443/tcp   # HTTPS
+  - ufw allow 8080/tcp  # Application port
+  - echo "y" | ufw enable
+  
+  # Configure fail2ban for SSH protection
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+  
+  # Enable and configure unattended upgrades for security
+  - echo 'Unattended-Upgrade::Automatic-Reboot "false";' >> /etc/apt/apt.conf.d/50unattended-upgrades
+  - echo 'Unattended-Upgrade::Remove-Unused-Dependencies "true";' >> /etc/apt/apt.conf.d/50unattended-upgrades
+  - systemctl enable unattended-upgrades
+  
+  # Configure time synchronization
+  - systemctl enable chrony
+  - systemctl start chrony
+  
+  # Enable audit logging
+  - systemctl enable auditd
+  - systemctl start auditd
+  
   # Install Docker from official repo
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
   - apt-get update
   - apt-get install -y docker-ce docker-ce-cli containerd.io
   - usermod -aG docker ubuntu
-
-  # Clean up unnecessary packages
+  
+  # SSH hardening
+  - sed -i 's/#Port 22/Port 2222/' /etc/ssh/sshd_config
+  - sed -i 's/#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+  - sed -i 's/#MaxAuthTries 6/MaxAuthTries 3/' /etc/ssh/sshd_config
+  - systemctl restart sshd
+  
+  # Clean up
   - apt-get autoremove -y
   - apt-get clean
+  - echo "Production server initialization complete" >> /var/log/server-init.log
 
-# Configure SSH to be more secure (optional)
+# Disable password authentication (production security)
 ssh_pwauth: false
 
-# Set timezone (optional)
+# Set timezone
 timezone: UTC
 
-# Log all cloud-init output to a file
+# Configure automatic security updates only
+apt:
+  sources:
+    security:
+      source: "deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse"
+
+# Production logging - more detailed
 output: 
   all: ">> /var/log/cloud-init-output.log"
+  
+# Write additional files for production monitoring
+write_files:    
+  - path: /etc/motd
+    content: |
+      ========================================
+      WARNING: This is a production system
+      All activity is monitored and logged
+      Unauthorized access is prohibited
+      ========================================
+    permissions: '0644'
+
+# No automatic reboot in production - manual control
+# Administrators should schedule maintenance windows

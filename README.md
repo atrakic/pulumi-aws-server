@@ -66,21 +66,21 @@ This Pulumi project creates a configurable Ubuntu server on AWS with best practi
 - Basic cloud-init configuration
 
 ### Production (`Pulumi.yaml` - default configuration)
-- Multi-AZ (3), t3.medium instance
+- Single AZ, t3.medium instance (minimal setup)
 - Very restricted access to specific IP ranges
 - Custom SSH port (2222)
-- No public IP (behind load balancer)
+- Public IP enabled for direct access
 - Creates new SSH key pair (provide your production public key)
 - Hardened cloud-init configuration with security features
 
 ## Cloud-Init Configurations
 
-### Development (`cloud-init.yaml`)
+### Development (`cloud-init-dev.yaml`)
 - Basic package updates
 - Docker installation
 - Development tools
 
-### Production (`cloud-init-prod.yaml`)
+### Production (`cloud-init.yaml`)
 - Security hardening (UFW firewall, fail2ban)
 - SSH hardening (custom port, restricted access)
 - Security auditing and monitoring
@@ -151,16 +151,3 @@ After deployment, you'll get:
 - Security group ID
 - VPC and subnet information
 - Deployment summary with all configuration
-
-## Migration
-
-To migrate from the old `index.ts` to the new component-based architecture:
-
-1. Backup your current configuration
-2. Replace `index.ts` with `index-new.ts`:
-   ```bash
-   mv index.ts index-old.ts
-   mv index-new.ts index.ts
-   ```
-3. Update your stack configuration as needed
-4. Run `pulumi up` to see the changes
