@@ -1,80 +1,135 @@
 import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
-import * as fs from "fs";
+import { SecurityGroupComponent, KeyPairComponent, EC2InstanceComponent } from "./components";
 
-// Minimal, public-only VPC with an Internet Gateway using awsx for simplicity.
+// Configurable Ubuntu Server on AWS with Pulumi
+// This template creates a secure, configurable Ubuntu server with environment-specific settings.
+// All hardcoded values have been moved to Pulumi configuration for better maintainability.
+
+// Load configuration
+const config = new pulumi.Config("aws-server");
+
+// Configuration values with defaults
+// These can be overridden in Pulumi.<stack>.yaml files for different environments
+const projectName = config.get("projectName") || "ubuntu-ssh";
+const environment = config.get("environment") || "dev";
+const instanceType = config.get("instanceType") || "t3.micro";
+const availabilityZones = config.getNumber("availabilityZones") || 1;
+const enableNatGateway = config.getBoolean("enableNatGateway") || false;
+const allowedCidrBlocks = config.get("allowedCidrBlocks") || "0.0.0.0/0";
+const sshPort = config.getNumber("sshPort") || 22;
+const createKeyPair = config.getBoolean("createKeyPair") || true;
+const publicKeyMaterial = config.get("publicKeyMaterial");
+const existingKeyPairName = config.get("existingKeyPairName");
+const ubuntuVersion = config.get("ubuntuVersion") || "22.04";
+const enablePublicIp = config.getBoolean("enablePublicIp") || true;
+const cloudInitFile = config.get("cloudInitFile") || "cloud-init.yaml";
+const additionalPorts = config.get("additionalPorts");
+
+// Create common tags
+const commonTags = {
+    Project: projectName,
+    Environment: environment,
+    ManagedBy: "Pulumi",
+};
+
+// VPC with configurable settings
+// Creates a VPC with configurable availability zones and optional NAT gateway.
+// For production: enableNatGateway=true, availabilityZones=3+ for high availability
+// For development: enableNatGateway=false, availabilityZones=1 for cost savings
 // Docs: https://www.pulumi.com/registry/packages/awsx/api-docs/ec2/vpc/
-const vpc = new awsx.ec2.Vpc("ubuntu-vpc", {
-    // Create a single public subnet across 1 AZ for simplicity.
-    numberOfAvailabilityZones: 1,
-    natGateways: { strategy: "None" },
+const vpc = new awsx.ec2.Vpc(`${projectName}-vpc`, {
+    // Create public subnets across configurable number of AZs
+    numberOfAvailabilityZones: availabilityZones,
+    natGateways: { strategy: enableNatGateway ? "Single" : "None" },
     subnetSpecs: [{ name: "public", type: "Public", cidrMask: 24 }],
-    tags: { Project: "ubuntu-ssh" },
+    tags: commonTags,
 });
 
-// Security group allowing SSH from anywhere (0.0.0.0/0). For production, restrict to your IP.
-// Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/securitygroup/
-const sg = new aws.ec2.SecurityGroup("ubuntu-sg", {
-    vpcId: vpc.vpcId,
-    description: "Allow SSH",
-    ingress: [{
-        protocol: "tcp",
-        fromPort: 22,
-        toPort: 22,
-        cidrBlocks: ["0.0.0.0/0"], // Replace with your IP/CIDR for tighter security.
-        description: "SSH",
-    }],
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "All outbound",
-    }],
-    tags: { Project: "ubuntu-ssh" },
-});
-
-// Option A: Provide your existing SSH public key material here to create a key pair.
-// If you prefer to use an existing AWS key pair, set keyName below and skip this resource.
+// SSH Key Pair configuration - flexible approach for different environments
+// Option A: Create new key pair (set createKeyPair=true, provide publicKeyMaterial)
+// Option B: Use existing AWS key pair (set createKeyPair=false, provide existingKeyPairName)
+// For production: Use existing key pairs for better security and key rotation
 // Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/keypair/
-const publicKeyMaterial = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMyReplaceThisWithYourPublicKeyContent user@host";
-const key = new aws.ec2.KeyPair("ubuntu-key", {
-    publicKey: publicKeyMaterial,
-    tags: { Project: "ubuntu-ssh" },
+
+// Validate key pair configuration
+if (createKeyPair && !publicKeyMaterial) {
+    throw new Error("publicKeyMaterial is required when createKeyPair is true");
+}
+if (!createKeyPair && !existingKeyPairName) {
+    throw new Error("existingKeyPairName is required when createKeyPair is false");
+}
+
+const keyPairComponent = new KeyPairComponent(`${projectName}-keypair`, {
+    projectName,
+    createKeyPair,
+    publicKeyMaterial, // Your SSH public key content (if creating new)
+    existingKeyPairName, // Name of existing AWS key pair (if using existing)
+    tags: commonTags,
 });
 
-// Lookup the latest Ubuntu 22.04 LTS (Jammy) AMI published by Canonical for the region.
-// This uses aws.ec2.getAmi to find the most recent image matching filters.
-// Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/getAmi/
-const ubuntuAmi = aws.ec2.getAmiOutput({
-    owners: ["099720109477"], // Canonical
-    filters: [
-        { name: "name", values: ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"] },
-        { name: "virtualization-type", values: ["hvm"] },
-    ],
-    mostRecent: true,
+// Security Group with configurable access rules
+// SSH access: Configure allowedCidrBlocks to restrict access (default: 0.0.0.0/0 - CHANGE FOR PRODUCTION!)
+// Additional ports: Comma-separated list for web services, APIs, etc.
+// For production: Restrict allowedCidrBlocks to your office/VPN IP range
+// Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/securitygroup/
+const securityGroupComponent = new SecurityGroupComponent(`${projectName}-security`, {
+    vpcId: vpc.vpcId,
+    projectName,
+    sshPort, // Configurable SSH port (default: 22, production: use non-standard port)
+    allowedCidrBlocks, // CIDR blocks allowed to access the server
+    additionalPorts, // Additional ports to open (e.g., "80,443,8080")
+    tags: commonTags,
 });
 
-// Load cloud-init configuration from external file
-const userData = fs.readFileSync("cloud-init.yaml", "utf8");
-
-// Create the EC2 instance in the public subnet with a public IP.
+// EC2 Instance with configurable settings and cloud-init
+// Automatically selects the latest Ubuntu AMI for the specified version
+// Cloud-init file: configurable (cloud-init.yaml for dev/staging, cloud-init-prod.yaml for production)
+// Instance sizing: t3.micro (dev), t3.small (staging), t3.medium+ (production)
+// Public IP: enabled for dev/staging, disabled for production (behind load balancer)
 // Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/instance/
-const server = new aws.ec2.Instance("ubuntu-server", {
-    ami: ubuntuAmi.id,
-    instanceType: "t3.micro",
-    subnetId: vpc.publicSubnetIds[0],
-    vpcSecurityGroupIds: [sg.id],
-    associatePublicIpAddress: true,
-    keyName: key.keyName, // Or set to an existing key pair name.
-    userData: userData,
-    tags: { Name: "ubuntu-server", Project: "ubuntu-ssh" },
+const instanceComponent = new EC2InstanceComponent(`${projectName}-instance`, {
+    projectName,
+    instanceType, // EC2 instance size based on environment
+    subnetId: vpc.publicSubnetIds[0], // Deploy in first public subnet
+    securityGroupIds: [securityGroupComponent.securityGroup.id],
+    enablePublicIp, // Whether to assign public IP address
+    keyName: keyPairComponent.keyName, // SSH key for access
+    cloudInitFile, // Cloud-init configuration file
+    ubuntuVersion, // Ubuntu LTS version (20.04, 22.04, 24.04)
+    tags: commonTags,
 });
 
-// Useful stack outputs.
-export const instancePublicIp = server.publicIp;
-export const instancePublicDns = server.publicDns;
-export const sshCommand = pulumi.interpolate`ssh -i ~/.ssh/id_ed25519 ubuntu@${server.publicIp}`;
+// Comprehensive stack outputs for reference and automation
+// These outputs can be used by other Pulumi stacks or external tools
+export const instanceId = instanceComponent.instance.id;
+export const instancePublicIp = instanceComponent.instance.publicIp;
+export const instancePrivateIp = instanceComponent.instance.privateIp;
+export const instancePublicDns = instanceComponent.instance.publicDns;
+export const securityGroupId = securityGroupComponent.securityGroup.id;
 export const vpcId = vpc.vpcId;
 export const publicSubnetId = vpc.publicSubnetIds[0];
+export const keyPairName = keyPairComponent.keyName;
+export const environmentName = environment;
+export const projectNameOutput = projectName;
+
+// SSH connection command with configurable key path and port
+// Adjust the key path (-i ~/.ssh/id_ed25519) to match your actual key location
+export const sshCommand = pulumi.interpolate`ssh -i ~/.ssh/id_ed25519 -p ${sshPort} ubuntu@${instanceComponent.instance.publicIp}`;
+
+// Deployment summary with all key information
+// This provides a comprehensive overview of the deployed infrastructure
+export const deploymentInfo = pulumi.interpolate`
+=== Deployment Summary ===
+Project: ${projectName}
+Environment: ${environment}
+Instance Type: ${instanceType}
+Ubuntu Version: ${ubuntuVersion}
+SSH Port: ${sshPort}
+Public IP: ${instanceComponent.instance.publicIp}
+Private IP: ${instanceComponent.instance.privateIp}
+
+SSH Command: ssh -i ~/.ssh/id_ed25519 -p ${sshPort} ubuntu@${instanceComponent.instance.publicIp}
+
+Security: ${additionalPorts ? `Additional ports open: ${additionalPorts}` : "Only SSH port open"}
+`;
