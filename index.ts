@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
+import * as fs from "fs";
 
 // Minimal, public-only VPC with an Internet Gateway using awsx for simplicity.
 // Docs: https://www.pulumi.com/registry/packages/awsx/api-docs/ec2/vpc/
@@ -55,8 +56,8 @@ const ubuntuAmi = aws.ec2.getAmiOutput({
     mostRecent: true,
 });
 
-// User data to ensure basic SSH readiness and updates.
-const userData = `#cloud-config\npackage_update: true\npackage_upgrade: true\nusers:\n  - name: ubuntu\n    groups: [sudo]\n    shell: /bin/bash\n    sudo: \"ALL=(ALL) NOPASSWD:ALL\"\n`;
+// Load cloud-init configuration from external file
+const userData = fs.readFileSync("cloud-init.yaml", "utf8");
 
 // Create the EC2 instance in the public subnet with a public IP.
 // Docs: https://www.pulumi.com/registry/packages/aws/api-docs/ec2/instance/

@@ -1,0 +1,53 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+users:
+  - name: ubuntu
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAr...
+
+# Optional: Install additional packages
+packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - gnupg
+  - vim
+  - net-tools
+  - ca-certificates
+  - software-properties-common
+  - unattended-upgrades
+  - fail2ban
+
+# Optional: Run commands on first boot
+runcmd:
+  - echo "Server initialization complete" > /tmp/init-complete.log
+  - systemctl enable ssh
+  - systemctl start ssh
+
+  # Install Docker from official repo
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io
+  - usermod -aG docker ubuntu
+
+  # Clean up unnecessary packages
+  - apt-get autoremove -y
+  - apt-get clean
+
+# Configure SSH to be more secure (optional)
+ssh_pwauth: false
+
+# Set timezone (optional)
+timezone: UTC
+
+# Log all cloud-init output to a file
+output: 
+  all: ">> /var/log/cloud-init-output.log"
