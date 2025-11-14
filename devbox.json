@@ -1,0 +1,18 @@
+{
+  "packages": [
+    "pulumi@latest",
+    "nodejs@latest",
+    "pulumiPackages.pulumi-language-nodejs@latest"
+  ],
+  "shell": {
+    "init_hook": [
+      "npm install",
+      "pulumi stack select dev",
+      "pulumi config set aws-server:publicKeyMaterial \"$(cat ~/.ssh/id_rsa.pub)\"",
+      "pulumi config set aws-server:allowedCidrBlocks \"$(curl -s ifconfig.me)/32\""
+    ],
+    "scripts": {
+      "run_test": "echo npm run start"
+    }
+  }
+}
