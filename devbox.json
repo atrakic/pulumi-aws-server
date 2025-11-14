@@ -12,7 +12,7 @@
       "pulumi config set aws-server:allowedCidrBlocks \"$(curl -s ifconfig.me)/32\""
     ],
     "scripts": {
-      "run_test": "echo npm run start"
+      "run_test": "pulumi up"
     }
   }
 }
