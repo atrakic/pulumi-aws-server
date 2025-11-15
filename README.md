@@ -1,153 +1,149 @@
-# Configurable Pulumi AWS Server
+# Simple Pulumi AWS Ubuntu Server
+
 > See [get started](https://www.pulumi.com/docs/ai/get-started/) guide.
 
-This Pulumi project creates a configurable Ubuntu server on AWS with best practices for different environments.
+A minimal Pulumi project that creates a basic Ubuntu server on AWS with configurable SSH key management.
 
 ## Features
 
-- **Environment-specific configurations** (dev, prod)
-- **Configurable security settings** (SSH ports, CIDR blocks, additional ports)
-- **Flexible SSH key management** (create new or use existing key pairs)
-- **Multiple Ubuntu versions support** (20.04, 22.04, 24.04)
-- **Modular component architecture** for better maintainability
-- **Environment-specific cloud-init configurations**
+- Simple Ubuntu EC2 instance in a minimal VPC
+- **Multiple Ubuntu versions support** (20.04, 22.04, 24.04
+- Configurable SSH key pair creation or use existing keys
+- Basic security groups with customizable access
+- Cost-optimized with t3.micro instance and single AZ
 
 ## Quick Start
 
-1. **Choose your environment configuration:**
+1. **Configure SSH key (choose one option):**
+
+   **Option A: Create new key pair**
    ```bash
-   # For development
-   pulumi stack select dev
-   
-   # For production (uses default Pulumi.yaml)
-   pulumi stack select production
+   pulumi config set aws-server:createKeyPair true
+   pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/id_rsa.pub)"
    ```
 
-2. **Configure your SSH key:**
+   **Option B: Use existing AWS key pair**
    ```bash
-   pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/id_ed25519.pub)"
+   pulumi config set aws-server:createKeyPair false
+   pulumi config set aws-server:existingKeyPairName "your-existing-key-name"
+   ```
+
+2. **Restrict access to your IP (recommended):**
+   ```bash
+   pulumi config set aws-server:allowedCidrBlocks "$(curl -s ifconfig.me)/32"
    ```
 
 3. **Deploy:**
    ```bash
-   pulumi up
+   pulumi up --yes
    ```
 
-## Configuration Options
+## Configuration
 
-### Core Infrastructure
-- `aws-server:projectName` - Project name for resource naming
-- `aws-server:environment` - Environment (dev/prod)
-- `aws-server:instanceType` - EC2 instance type (t3.micro, t3.small, etc.)
-- `aws-server:availabilityZones` - Number of AZs for the VPC
-- `aws-server:enableNatGateway` - Whether to enable NAT gateway
+All configuration is done via `Pulumi.yaml` or CLI commands:
 
-### Security Configuration
-- `aws-server:allowedCidrBlocks` - CIDR blocks allowed to access the server
-- `aws-server:sshPort` - SSH port (default: 22)
-- `aws-server:additionalPorts` - Comma-separated list of additional ports to open
-
-### SSH Key Management
-- `aws-server:createKeyPair` - Whether to create a new key pair
+### Required Settings
+Choose one SSH key option:
+- `aws-server:createKeyPair` - true/false (default: false)
 - `aws-server:publicKeyMaterial` - Your SSH public key (if creating new)
-- `aws-server:existingKeyPairName` - Name of existing AWS key pair (if not creating new)
+- `aws-server:existingKeyPairName` - Name of existing AWS key pair (if using existing)
 
-### Instance Configuration
-- `aws-server:ubuntuVersion` - Ubuntu version (20.04, 22.04, 24.04)
-- `aws-server:enablePublicIp` - Whether to assign a public IP
-- `aws-server:cloudInitFile` - Cloud-init file to use
+### Optional Settings
+- `aws-server:projectName` - Project name (default: "ubuntu-ssh")
+- `aws-server:instanceType` - EC2 instance type (default: "t3.micro")
+- `aws-server:allowedCidrBlocks` - IP addresses allowed SSH access (default: "0.0.0.0/0" - **Change this!**)
+- `aws-server:ubuntuVersion` - Ubuntu version (default: "22.04")
+- `aws-server:additionalPorts` - Additional ports to open (e.g. "80,443")
 
-## Environment Configurations
+## Security
 
-### Development (`Pulumi.dev.yaml`)
-- Single AZ, t3.micro instance
-- Open access (0.0.0.0/0) - **Change this for security!**
-- Creates new SSH key pair
-- Basic cloud-init configuration
+⚠️ **Important**: The default configuration allows SSH access from anywhere (`0.0.0.0/0`).
 
-### Production (`Pulumi.yaml` - default configuration)
-- Single AZ, t3.medium instance (minimal setup)
-- Very restricted access to specific IP ranges
-- Custom SSH port (2222)
-- Public IP enabled for direct access
-- Creates new SSH key pair (provide your production public key)
-- Hardened cloud-init configuration with security features
+For better security, restrict access to your IP:
 
-## Cloud-Init Configurations
+```bash
+# Set to your current IP
+pulumi config set aws-server:allowedCidrBlocks "$(curl -s ifconfig.me)/32"
 
-### Development (`cloud-init-dev.yaml`)
-- Basic package updates
-- Docker installation
-- Development tools
+# Or set to your office network
+pulumi config set aws-server:allowedCidrBlocks "203.0.113.0/24"
+```
 
-### Production (`cloud-init.yaml`)
-- Security hardening (UFW firewall, fail2ban)
-- SSH hardening (custom port, restricted access)
-- Security auditing and monitoring
-- Automatic security updates
-- No automatic reboots
+## SSH Key Management
+
+This project supports two approaches for SSH keys:
+
+### Create New Key Pair (Default)
+Creates a new AWS key pair using your public key:
+```bash
+pulumi config set aws-server:createKeyPair true
+pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/id_rsa.pub)"
+```
+**Note**: This may incur small AWS charges for key pair storage.
+
+### Use Existing Key Pair (Cost-Free)
+Uses an existing AWS key pair in your account:
+```bash
+pulumi config set aws-server:createKeyPair false
+pulumi config set aws-server:existingKeyPairName "my-existing-key"
+```
+**Recommended**: Use this option to avoid any key pair creation costs.
 
 ## Usage Examples
 
-### 1. Development Setup
+### Basic deployment with new key pair:
 ```bash
-pulumi stack select dev
+pulumi config set aws-server:createKeyPair true
 pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/id_rsa.pub)"
-pulumi config set aws-server:allowedCidrBlocks "$(curl -s ifconfig.me)/32"  # Your IP only
+pulumi config set aws-server:allowedCidrBlocks "$(curl -s ifconfig.me)/32"
 pulumi up
 ```
 
-### 2. Production Deployment
+### Deployment with existing key pair (cost-free):
 ```bash
-pulumi stack select production
-pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/id_rsa_prod.pub)"
-pulumi config set aws-server:allowedCidrBlocks "203.0.113.0/24"  # Your office network
+pulumi config set aws-server:createKeyPair false
+pulumi config set aws-server:existingKeyPairName "my-existing-key"
+pulumi config set aws-server:allowedCidrBlocks "$(curl -s ifconfig.me)/32"
 pulumi up
 ```
 
-### 3. Custom Configuration
+### Web server with additional ports:
 ```bash
-# Custom instance type and additional services
-pulumi config set aws-server:instanceType "t3.large"
-pulumi config set aws-server:additionalPorts "80,443,3000,9090"
-pulumi config set aws-server:ubuntuVersion "24.04"
+pulumi config set aws-server:additionalPorts "80,443"
+pulumi config set aws-server:instanceType "t3.small"
+pulumi up
 ```
 
-## Component Architecture
+## Prerequisites
 
-The project is organized into reusable components:
-
-- **SecurityGroupComponent**: Manages security groups with configurable rules
-- **KeyPairComponent**: Handles SSH key pair creation or existing key usage
-- **EC2InstanceComponent**: Creates EC2 instances with AMI lookup and cloud-init
-
-## Security Best Practices
-
-1. **Always restrict CIDR blocks** in production:
-   ```bash
-   pulumi config set aws-server:allowedCidrBlocks "YOUR.IP.ADDRESS/32"
-   ```
-
-2. **Use separate SSH keys for each environment**:
-   ```bash
-   pulumi config set aws-server:publicKeyMaterial "$(cat ~/.ssh/production_key.pub)"
-   ```
-
-3. **Use custom SSH ports in production**:
-   ```bash
-   pulumi config set aws-server:sshPort 2222
-   ```
-
-4. **Disable public IPs in production** (use bastion/VPN):
-   ```bash
-   pulumi config set aws-server:enablePublicIp false
-   ```
+- AWS CLI configured or environment variables set
+- Pulumi CLI installed
+- (If using existing key pair) An existing AWS key pair in your region
 
 ## Outputs
 
 After deployment, you'll get:
-- Instance ID, public/private IPs
+- Instance public/private IP addresses
 - SSH connection command
-- Security group ID
-- VPC and subnet information
-- Deployment summary with all configuration
+- Security group and VPC information
+
+## Project Structure
+
+```
+├── index.ts              (main infrastructure code)
+├── Pulumi.yaml           (configuration)
+├── cloud-init.yaml       (server initialization script)
+├── package.json          (dependencies)
+└── components/           (reusable components)
+    ├── security-group.ts
+    ├── key-pair.ts
+    └── ec2-instance.ts
+```
+
+## Cost Optimization
+
+This configuration is designed for minimal cost:
+- Single t3.micro instance (free tier eligible)
+- Single availability zone
+- No NAT gateway
+- Option to use existing key pairs (no key creation charges)
