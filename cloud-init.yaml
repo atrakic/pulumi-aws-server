@@ -1,21 +1,17 @@
 #cloud-config
 
-# Production cloud-init configuration
-# More security-focused and optimized for production workloads
-
 package_update: true
 package_upgrade: true
 
-# Production user configuration
 users:
   - name: ubuntu
     groups: [sudo]
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
-      - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAr... # Production SSH key
+      - ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAr... # SSH key
 
-# Production packages - minimal and security-focused
+# Packages
 packages:
   - curl
   - wget
@@ -35,10 +31,9 @@ packages:
   - docker.io
   - docker-compose
 
-# Production-specific commands
+# Commands
 runcmd:
-  - echo "Production server initialization started" > /var/log/server-init.log
-
+  - echo "Server initialization started" > /var/log/server-init.log
   # Configure UFW firewall
   - ufw default deny incoming
   - ufw default allow outgoing
@@ -94,20 +89,13 @@ apt:
     security:
       source: "deb http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse"
 
-# Production logging - more detailed
 output:
   all: ">> /var/log/cloud-init-output.log"
 
-# Write additional files for production monitoring
+# Write additional files for monitoring
 write_files:
   - path: /etc/motd
     content: |
-      ========================================
-      WARNING: This is a production system
       All activity is monitored and logged
       Unauthorized access is prohibited
-      ========================================
     permissions: '0644'
-
-# No automatic reboot in production - manual control
-# Administrators should schedule maintenance windows
